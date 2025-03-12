@@ -115,48 +115,65 @@ jobs:
         sudo mkdir -p $(pwd)/zap_wrk/reports
         sudo chmod -R 777 $(pwd)/zap_wrk/reports
         
-        # Jalankan ZAP Baseline Scan dengan output ke direktori reports
-        # Parameter -I mengabaikan warning ketika menentukan kode keluar
+        # Jalankan ZAP Baseline Scan dan simpan output JSON
         docker run --user root --rm -v "$(pwd)/zap_wrk:/zap/wrk:rw" \
           --network host \
-          -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+          -t zaproxy/zap-stable zap-baseline.py \
           -t http://localhost/DamnCRUD/ \
-          -g /zap/wrk/reports/baseline-report.html \
-          -x /zap/wrk/reports/baseline-report.xml \
           -J /zap/wrk/reports/baseline-report.json \
-          -j /zap/wrk/reports/baseline-report.md \
           -a \
-          -I || echo "ZAP scan selesai dengan peringatan atau error (exit code $?)"
+          -I | tee zap_output.txt || echo "ZAP scan selesai dengan peringatan atau error (exit code $?)"
         
         echo "ZAP Baseline Scan selesai. Memeriksa hasil..."
         ls -la $(pwd)/zap_wrk/reports/
         
-        # Jika laporan markdown tidak ada, buat laporan sederhana
-        if [ ! -f "$(pwd)/zap_wrk/reports/baseline-report.md" ]; then
-          echo "Laporan markdown tidak ditemukan, mencoba menggunakan laporan HTML..."
+        # Buat laporan Markdown yang lebih baik dari output JSON
+        echo "# ZAP DAST Security Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "## Ringkasan Hasil" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        
+        # Ekstrak ringkasan hasil dari output ZAP
+        grep "FAIL" zap_output.txt | head -1 >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        
+        # Periksa apakah file JSON ada
+        if [ -f "$(pwd)/zap_wrk/reports/baseline-report.json" ]; then
+          echo "## Kerentanan yang Ditemukan" >> $(pwd)/zap_wrk/reports/baseline-report.md
+          echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
           
-          # Cek apakah laporan HTML tersedia
-          if [ -f "$(pwd)/zap_wrk/reports/baseline-report.html" ]; then
-            # Ekstrak konten HTML dan buat markdown sederhana
-            echo "# ZAP Baseline Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "## Hasil" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "Laporan HTML tersedia sebagai artifact." >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "Ditemukan beberapa peringatan keamanan. Silakan lihat laporan lengkap." >> $(pwd)/zap_wrk/reports/baseline-report.md
-          else
-            # Buat laporan fallback jika tidak ada laporan yang tersedia
-            echo "# ZAP Baseline Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "## Kesalahan" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-            echo "ZAP tidak berhasil menghasilkan laporan. Hal ini bisa terjadi karena masalah izin atau konfigurasi." >> $(pwd)/zap_wrk/reports/baseline-report.md
-          fi
+          # Gunakan jq untuk mengekstrak dan memformat data dari JSON
+          # Perlu menginstal jq terlebih dahulu
+          apt-get update && apt-get install -y jq
+          
+          # Format kerentanan dalam format Markdown dengan jq
+          jq -r '.site[0].alerts[] | "### " + .name + "\n\n**Tingkat Risiko:** " + .riskdesc + "\n\n**Deskripsi:**\n" + .desc + "\n\n**Lokasi:**\n```\n" + (.instances[] | .uri) + "\n```\n\n**Solusi Rekomendasi:**\n" + .solution + "\n\n---\n"' $(pwd)/zap_wrk/reports/baseline-report.json >> $(pwd)/zap_wrk/reports/baseline-report.md || echo "Tidak dapat mengekstrak data dari JSON"
+        else
+          # Jika file JSON tidak ada, gunakan output teks sebagai fallback
+          echo "## Detail Peringatan" >> $(pwd)/zap_wrk/reports/baseline-report.md
+          echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
+          grep -A 15 "WARN" zap_output.txt >> $(pwd)/zap_wrk/reports/baseline-report.md || echo "Tidak ada peringatan yang ditemukan"
+          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
         fi
+        
+        # Tambahkan rekomendasi umum
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "## Rekomendasi Umum" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "1. **Implementasikan Anti-CSRF Token** - Untuk melindungi terhadap serangan Cross-Site Request Forgery" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "2. **Tambahkan Header Keamanan** - Seperti Content-Security-Policy, X-Frame-Options, X-XSS-Protection" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "3. **Validasi Input** - Sanitasi dan validasi semua input pengguna untuk mencegah XSS dan injeksi" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "4. **Gunakan HTTPS** - Enkripsi semua trafik dengan HTTPS" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "5. **Update Komponen** - Pastikan semua framework dan library diperbarui ke versi terbaru yang aman" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "## Detail Lengkap" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+        echo "Laporan lengkap tersedia dalam artifact GitHub Actions." >> $(pwd)/zap_wrk/reports/baseline-report.md
+        
+        echo "Laporan Markdown yang lebih baik telah dibuat di $(pwd)/zap_wrk/reports/baseline-report.md"
       continue-on-error: true
     
     - name: Jalankan Nikto Scan
