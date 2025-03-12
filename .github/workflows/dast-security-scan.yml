@@ -102,14 +102,17 @@ jobs:
       run: |
         echo "Menjalankan OWASP ZAP Baseline Scan (pemeriksaan dasar)..."
         
-        # Jalankan ZAP baseline scan dengan Docker - tanpa menggunakan opsi gen.conf
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-baseline.py \
+        # Jalankan ZAP baseline scan dengan Docker sebagai root
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-baseline.py \
           -t http://localhost/DamnCRUD/ \
           -r baseline-report.html \
           -I \
           -a \
           -j \
           --auto
+          
+        # Perbaiki izin file hasil
+        sudo chown -R $(id -u):$(id -g) zap-reports/
           
         # Salin laporan untuk keperluan artifact
         cp zap-reports/baseline-report.html reports/
@@ -124,8 +127,8 @@ jobs:
       run: |
         echo "Menjalankan OWASP ZAP API Scan (scan mendalam)..."
         
-        # Jalankan ZAP API scan dengan Docker - dengan user yang sama dengan host
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-api-scan.py \
+        # Jalankan ZAP API scan dengan Docker sebagai root
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-api-scan.py \
           -t http://localhost/DamnCRUD/ \
           -f openapi \
           -r api-report.html \
@@ -134,6 +137,9 @@ jobs:
           -I \
           -a \
           -j
+        
+        # Perbaiki izin file hasil
+        sudo chown -R $(id -u):$(id -g) zap-reports/
         
         # Salin laporan untuk keperluan artifact
         cp zap-reports/api-report.html reports/
@@ -167,8 +173,8 @@ jobs:
         40018 = FAIL      # SQL Injection
         EOF
         
-        # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam) - dengan user yang sama dengan host
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-full-scan.py \
+        # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam) sebagai root
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-full-scan.py \
           -t http://localhost/DamnCRUD/ \
           -r full-scan-report.html \
           -x full-scan-report.xml \
@@ -180,6 +186,9 @@ jobs:
           -T 10 \
           -m 5 \
           -z "-config attackStrength=HIGH -config attackPersistence=10 -config globalPluginsEnabled=true -config scanner.scanMaxDuration=10"
+        
+        # Perbaiki izin file hasil
+        sudo chown -R $(id -u):$(id -g) zap-reports/
         
         # Salin laporan untuk keperluan artifact
         cp zap-reports/full-scan-report.html reports/
@@ -296,14 +305,21 @@ jobs:
               reportTitle: Authentication Scan Report
         EOF
         
-        # Jalankan ZAP Authentication Scan dengan Docker - dengan user yang sama dengan host
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap.sh \
+        # Jalankan ZAP Authentication Scan dengan Docker sebagai root
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap.sh \
           -cmd \
           -autorun /zap/wrk/zap-auth-scan.yaml
+        
+        # Perbaiki izin file hasil
+        sudo chown -R $(id -u):$(id -g) zap-reports/
           
         # Salin laporan untuk keperluan artifact jika ada
         if [ -f "auth-scan-report.html" ]; then
           cp auth-scan-report.html reports/
+        fi
+        
+        if [ -f "zap-reports/auth-scan-report.html" ]; then
+          cp zap-reports/auth-scan-report.html reports/
         fi
       
         # Buat versi ringkasan markdown
