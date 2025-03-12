@@ -427,7 +427,7 @@ jobs:
           gh issue create \
             --title "$ISSUE_TITLE" \
             --body-file issue_summary.md \
-            --label "security" --label "dast-scan" --label "critical"
+            --label "security" --label "dast-scan" --label "critical" --create-label
         else
           # Cek jika ada temuan Nikto yang mungkin penting
           if grep -q "OSVDB-" reports/nikto-output.txt; then
@@ -440,7 +440,7 @@ jobs:
             gh issue create \
               --title "$ISSUE_TITLE" \
               --body-file issue_summary.md \
-              --label "security" --label "dast-scan" --label "warning"
+              --label "security" --label "dast-scan" --label "warning" --create-label
           else
             echo "Tidak ada kerentanan kritis yang ditemukan, membuat issue dengan tingkat info..."
             
@@ -451,7 +451,7 @@ jobs:
             gh issue create \
               --title "$ISSUE_TITLE" \
               --body-file issue_summary.md \
-              --label "security" --label "dast-scan" --label "info"
+              --label "security" --label "dast-scan" --label "info" --create-label
           fi
         fi
       env:
