@@ -196,10 +196,12 @@ def test_login_with_invalid_credentials(driver, username, password):
     
     # Klik tombol login
     driver.find_element(By.XPATH, "//button[@type='submit'] | //input[@type='submit']").click()
+
+    take_screenshot(driver, "login_unsuccessful", "login")
     
     # Verifikasi notifikasi error
     assert "Damn, wrong credentials!!" in driver.page_source
-    take_screenshot(driver, "login_unsuccessful", "login")
+    
 
 # Test Create Contact
 def test_create_contact(driver):
