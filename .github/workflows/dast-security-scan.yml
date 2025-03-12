@@ -1,12 +1,10 @@
 name: DAST Security Scan
 
 on:
-  # Menjalankan setelah workflow integration-tests selesai dijalankan
-  workflow_run:
-    workflows: ["Integration Tests"]
-    types:
-      - completed
-  # Menjalankan secara manual jika diperlukan
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -88,45 +86,134 @@ jobs:
       run: |
         echo "Menyiapkan direktori kerja untuk ZAP..."
         # Buat direktori kerja dengan izin penuh
-        sudo mkdir -p /tmp/zap_wrk
-        sudo chmod 777 /tmp/zap_wrk
-        sudo chown -R 1000:1000 /tmp/zap_wrk  # UID:GID untuk non-root di container
-        ls -la /tmp/zap_wrk
+        sudo mkdir -p $(pwd)/zap_wrk
+        sudo chmod -R 777 $(pwd)/zap_wrk
+        # Buat subdirektori yang diperlukan
+        sudo mkdir -p $(pwd)/zap_wrk/output
+        sudo chmod -R 777 $(pwd)/zap_wrk/output
+        ls -la $(pwd)/zap_wrk
         
-        # Buat direktori .zap jika belum ada
-        sudo mkdir -p .zap
-        
-        # Pastikan file rules.tsv ada dengan izin yang benar
-        if [ ! -f .zap/rules.tsv ]; then
-          echo "" | sudo tee .zap/rules.tsv
-        fi
-        sudo chmod 666 .zap/rules.tsv
+        # Buat direktori untuk menyimpan laporan
+        sudo mkdir -p $(pwd)/zap_reports
+        sudo chmod -R 777 $(pwd)/zap_reports
       
-    - name: OWASP ZAP Baseline Scan
-      uses: zaproxy/action-baseline@v0.10.0
+    - name: Jalankan ZAP Baseline Scan dengan Docker
+      run: |
+        echo "Menjalankan ZAP Baseline Scan sebagai root user..."
+        
+        docker pull ghcr.io/zaproxy/zaproxy:stable
+        
+        # Dapatkan IP host
+        HOST_IP=$(hostname -I | awk '{print $1}')
+        echo "Host IP: $HOST_IP"
+        
+        docker run --user root --rm -v "$(pwd)/zap_wrk:/zap/wrk:rw" -v "$(pwd)/zap_reports:/zap/reports:rw" \
+          --network host \
+          -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+          -t http://localhost/DamnCRUD/ \
+          -g zap_reports/baseline-report.html \
+          -x zap_reports/baseline-report.xml \
+          -J zap_reports/baseline-report.json \
+          -j zap_reports/baseline-report.md \
+          -a
+          
+        echo "ZAP Baseline Scan selesai. Memeriksa hasil..."
+        ls -la $(pwd)/zap_reports
+        
+    - name: Jalankan Nikto Scan
+      run: |
+        echo "Menjalankan pemindaian Nikto..."
+        # Instal Nikto
+        sudo apt-get update
+        sudo apt-get install -y nikto
+        
+        # Buat direktori untuk laporan Nikto
+        mkdir -p nikto_reports
+        
+        # Jalankan Nikto scan
+        nikto -h http://localhost/DamnCRUD/ -output nikto_reports/nikto-report.html -Format htm
+        nikto -h http://localhost/DamnCRUD/ | tee nikto_reports/nikto-output.txt
+        
+        # Buat versi markdown dari hasil Nikto
+        echo "# Hasil Pemindaian Nikto" > nikto_reports/nikto-report.md
+        echo "Tanggal: $(date)" >> nikto_reports/nikto-report.md
+        echo "" >> nikto_reports/nikto-report.md
+        echo "## Ringkasan Temuan" >> nikto_reports/nikto-report.md
+        echo '```' >> nikto_reports/nikto-report.md
+        grep -E "^\+ " nikto_reports/nikto-output.txt >> nikto_reports/nikto-report.md
+        echo '```' >> nikto_reports/nikto-report.md
+        
+        echo "## Detail Lengkap" >> nikto_reports/nikto-report.md
+        echo '```' >> nikto_reports/nikto-report.md
+        cat nikto_reports/nikto-output.txt >> nikto_reports/nikto-report.md
+        echo '```' >> nikto_reports/nikto-report.md
+        
+        echo "Pemindaian Nikto selesai. Memeriksa hasil..."
+        ls -la nikto_reports
+      
+    - name: Simpan laporan Nikto
+      uses: actions/upload-artifact@v4
+      if: always()
       with:
-        target: 'http://localhost/DamnCRUD/'
-        rules_file_name: '.zap/rules.tsv'
-        cmd_options: '-a -z "-configfile /home/zap/.ZAP_D/config.xml"'
-      env:
-        # Gunakan direktori kerja di /tmp yang sudah memiliki izin penuh
-        ZAP_CONFIGS_CONFIGS_DIR: "/tmp/zap_wrk"
-    
-    - name: OWASP ZAP Full Scan
-      uses: zaproxy/action-full-scan@v0.8.0
-      with:
-        target: 'http://localhost/DamnCRUD/'
-        rules_file_name: '.zap/rules.tsv'
-        cmd_options: '-a -z "-configfile /home/zap/.ZAP_D/config.xml"'
-      env:
-        # Gunakan direktori kerja di /tmp yang sudah memiliki izin penuh
-        ZAP_CONFIGS_CONFIGS_DIR: "/tmp/zap_wrk"
-    
+        name: nikto-scan-reports
+        path: nikto_reports/*
+        
     - name: Simpan laporan ZAP
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: zap-scan-reports
         path: |
-          zap-*-report.html
-          zap-*-report.md 
+          zap_reports/*
+          
+    - name: Buat GitHub Issue untuk Hasil ZAP Scan
+      if: success() || failure()
+      run: |
+        # Setup GitHub CLI
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+        
+        # Autentikasi GitHub CLI
+        echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+        
+        # Buat label yang diperlukan
+        gh label create "security" --description "Terkait keamanan aplikasi" --color "D93F0B" || true
+        gh label create "dast-scan" --description "Hasil dari pemindaian DAST" --color "0075CA" || true
+        gh label create "zap-scan" --description "Hasil dari pemindaian OWASP ZAP" --color "7057FF" || true
+        gh label create "nikto-scan" --description "Hasil dari pemindaian Nikto" --color "5319E7" || true
+        
+        # Cek hasil ZAP Scan dan buat issue
+        if [ -f "zap_reports/baseline-report.md" ]; then
+          echo "Membuat issue untuk ZAP Baseline Scan..."
+          
+          # Tentukan judul issue
+          ISSUE_TITLE="Hasil ZAP Baseline Scan - $(date +'%Y-%m-%d')"
+          
+          # Buat issue dengan lampiran laporan ZAP Baseline
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --body-file zap_reports/baseline-report.md \
+            --label "security" --label "dast-scan" --label "zap-scan"
+        else
+          echo "File laporan ZAP Baseline tidak ditemukan."
+        fi
+        
+        # Cek hasil Nikto Scan dan buat issue terpisah
+        if [ -f "nikto_reports/nikto-report.md" ]; then
+          echo "Membuat issue untuk Nikto Scan..."
+          
+          # Tentukan judul issue untuk Nikto
+          ISSUE_TITLE="Hasil Nikto Scan - $(date +'%Y-%m-%d')"
+          
+          # Buat issue dengan lampiran laporan Nikto
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --body-file nikto_reports/nikto-report.md \
+            --label "security" --label "dast-scan" --label "nikto-scan"
+        else
+          echo "File laporan Nikto tidak ditemukan."
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
