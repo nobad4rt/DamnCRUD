@@ -13,6 +13,12 @@ jobs:
   zap-scan:
     runs-on: ubuntu-latest
     
+    # Menambahkan izin khusus untuk job ini
+    permissions:
+      contents: read
+      issues: write
+      security-events: write
+    
     steps:
     - name: Checkout kode
       uses: actions/checkout@v4
