@@ -1,0 +1,9 @@
+*.png
+report.html
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+.pytest_cache/

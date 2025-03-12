@@ -1,0 +1,113 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Memungkinkan menjalankan workflow secara manual dari UI GitHub
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      # Setup MySQL untuk testing
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root123
+          MYSQL_DATABASE: damncrud
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    
+    steps:
+    - name: Checkout kode
+      uses: actions/checkout@v3
+    
+    - name: Setup PHP dengan Composer
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        extensions: mbstring, intl, pdo_mysql
+    
+    - name: Install dependensi PHP
+      run: |
+        composer install --prefer-dist --no-progress
+    
+    - name: Import database
+      run: mysql -h 127.0.0.1 -u root -proot123 damncrud < db/damncrud.sql
+    
+    - name: Setup Apache
+      run: |
+        sudo apt-get update
+        sudo apt-get install apache2 libapache2-mod-php7.4
+        sudo a2enmod php7.4
+        sudo systemctl start apache2
+        sudo ln -s $(pwd) /var/www/html/DamnCRUD
+        sudo chmod -R 777 /var/www/html/DamnCRUD
+    
+    - name: Sesuaikan koneksi database
+      run: |
+        sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "127.0.0.1";/' functions.php
+        sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "root";/' functions.php
+        sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "root123";/' functions.php
+        sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' functions.php
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependensi Python
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-html pytest-xdist selenium webdriver-manager
+    
+    - name: Install Firefox
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y firefox-esr
+        firefox --version
+    
+    - name: Install Firefox GeckoDriver
+      run: |
+        wget https://github.com/mozilla/geckodriver/releases/download/v0.33.0/geckodriver-v0.33.0-linux64.tar.gz
+        tar -xzf geckodriver-v0.33.0-linux64.tar.gz
+        sudo mv geckodriver /usr/local/bin/
+        geckodriver --version
+    
+    - name: Install Chrome sebagai cadangan
+      run: |
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        google-chrome --version
+    
+    - name: Jalankan test paralel
+      run: |
+        # Atur display virtual untuk browser
+        export DISPLAY=:99
+        sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+        
+        # Set BASE_URL di test_integration.py
+        sed -i 's|BASE_URL = "http://localhost/DamnCRUD"|BASE_URL = "http://localhost/DamnCRUD"|g' test_integration.py
+        
+        # Jalankan test
+        python -m pytest test_integration.py -v --html=report.html --self-contained-html -n 2
+    
+    - name: Simpan bukti screenshot
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: screenshots
+        path: '*.png'
+    
+    - name: Simpan laporan test
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-reports
+        path: report.html 
