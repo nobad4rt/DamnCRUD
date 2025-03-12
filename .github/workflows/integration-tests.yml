@@ -1,10 +1,10 @@
 name: Integration Tests
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  # push:
+  #   branches: [ main, master ]
+  # pull_request:
+  #   branches: [ main, master ]
   workflow_dispatch:  # Memungkinkan menjalankan workflow secara manual dari UI GitHub
 
 jobs:
