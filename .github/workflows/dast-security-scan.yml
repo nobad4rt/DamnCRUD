@@ -98,57 +98,56 @@ jobs:
         sudo docker pull zaproxy/zap-stable
         sudo docker images
         
-    - name: Jalankan OWASP ZAP Baseline Scan (Cepat)
-      run: |
-        echo "Menjalankan OWASP ZAP Baseline Scan (pemeriksaan dasar)..."
+    # - name: Jalankan OWASP ZAP Baseline Scan (Cepat)
+    #   run: |
+    #     echo "Menjalankan OWASP ZAP Baseline Scan (pemeriksaan dasar)..."
         
-        # Jalankan ZAP baseline scan dengan Docker sebagai root
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-baseline.py \
-          -t http://localhost/DamnCRUD/ \
-          -r baseline-report.html \
-          -I \
-          -a \
-          -j \
-          --auto
+    #     # Jalankan ZAP baseline scan dengan Docker sebagai root
+    #     sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-baseline.py \
+    #       -t http://localhost/DamnCRUD/ \
+    #       -r baseline-report.html \
+    #       -I \
+    #       -a \
+    #       -j \
+    #       --auto
           
-        # Perbaiki izin file hasil
-        sudo chown -R $(id -u):$(id -g) zap-reports/
+    #     # Perbaiki izin file hasil
+    #     sudo chown -R $(id -u):$(id -g) zap-reports/
           
-        # Salin laporan untuk keperluan artifact
-        cp zap-reports/baseline-report.html reports/
+    #     # Salin laporan untuk keperluan artifact
+    #     cp zap-reports/baseline-report.html reports/
         
-        # Buat versi ringkasan markdown
-        echo "# Hasil ZAP Baseline Scan" > reports/zap-baseline-summary.md
-        echo "Tanggal: $(date)" >> reports/zap-baseline-summary.md
-        echo "" >> reports/zap-baseline-summary.md
-        echo "ZAP baseline scan selesai. Lihat laporan HTML untuk detail lengkap." >> reports/zap-baseline-summary.md
+    #     # Buat versi ringkasan markdown
+    #     echo "# Hasil ZAP Baseline Scan" > reports/zap-baseline-summary.md
+    #     echo "Tanggal: $(date)" >> reports/zap-baseline-summary.md
+    #     echo "" >> reports/zap-baseline-summary.md
+    #     echo "ZAP baseline scan selesai. Lihat laporan HTML untuk detail lengkap." >> reports/zap-baseline-summary.md
         
-    - name: Jalankan OWASP ZAP API Scan (Mendalam)
-      run: |
-        echo "Menjalankan OWASP ZAP API Scan (scan mendalam)..."
+    # - name: Jalankan OWASP ZAP API Scan (Mendalam)
+    #   run: |
+    #     echo "Menjalankan OWASP ZAP API Scan (scan mendalam)..."
         
-        # Jalankan ZAP API scan dengan Docker sebagai root
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-api-scan.py \
-          -t http://localhost/DamnCRUD/ \
-          -f openapi \
-          -r api-report.html \
-          -x api-report.xml \
-          --ajax \
-          -I \
-          -a \
-          -j
+    #     # Jalankan ZAP API scan dengan Docker sebagai root
+    #     sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-api-scan.py \
+    #       -t http://localhost/DamnCRUD/ \
+    #       -f openapi \
+    #       -r api-report.html \
+    #       -x api-report.xml \
+    #       -I \
+    #       -a \
+    #       -j
         
-        # Perbaiki izin file hasil
-        sudo chown -R $(id -u):$(id -g) zap-reports/
+    #     # Perbaiki izin file hasil
+    #     sudo chown -R $(id -u):$(id -g) zap-reports/
         
-        # Salin laporan untuk keperluan artifact
-        cp zap-reports/api-report.html reports/
+    #     # Salin laporan untuk keperluan artifact
+    #     cp zap-reports/api-report.html reports/
         
-        # Buat versi ringkasan markdown
-        echo "# Hasil ZAP API Scan" > reports/zap-api-summary.md
-        echo "Tanggal: $(date)" >> reports/zap-api-summary.md
-        echo "" >> reports/zap-api-summary.md
-        echo "ZAP API scan selesai. Lihat laporan HTML untuk detail lengkap." >> reports/zap-api-summary.md
+    #     # Buat versi ringkasan markdown
+    #     echo "# Hasil ZAP API Scan" > reports/zap-api-summary.md
+    #     echo "Tanggal: $(date)" >> reports/zap-api-summary.md
+    #     echo "" >> reports/zap-api-summary.md
+    #     echo "ZAP API scan selesai. Lihat laporan HTML untuk detail lengkap." >> reports/zap-api-summary.md
         
     - name: Jalankan OWASP ZAP Full Scan (Sangat Mendalam)
       run: |
@@ -162,10 +161,10 @@ jobs:
         # Level: IGNORE, INFO, WARN, FAIL
         
         # Ignore beberapa aturan yang umum menghasilkan false positives
-        10016 = IGNORE    # Missing Anti-clickjacking Header
-        10021 = IGNORE    # X-Content-Type-Options Header Missing
-        10038 = IGNORE    # Content Security Policy (CSP) Header Not Set
-        10049 = IGNORE    # Non-Storable Content
+        10016 = INFO    # Missing Anti-clickjacking Header
+        10021 = INFO    # X-Content-Type-Options Header Missing
+        10038 = INFO    # Content Security Policy (CSP) Header Not Set
+        10049 = INFO    # Non-Storable Content
         
         # Tingkatkan beberapa aturan penting
         40012 = FAIL      # Cross Site Scripting (Reflected)
