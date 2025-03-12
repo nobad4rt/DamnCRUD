@@ -24,7 +24,7 @@ jobs:
     
     steps:
     - name: Checkout kode
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Setup PHP dengan Composer
       uses: shivammathur/setup-php@v2
@@ -99,14 +99,14 @@ jobs:
         python -m pytest test_integration.py -v --html=report.html --self-contained-html -n 2
     
     - name: Simpan bukti screenshot
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: screenshots
         path: '*.png'
     
     - name: Simpan laporan test
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-reports
