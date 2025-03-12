@@ -1,11 +1,13 @@
 import pytest
 import time
 import os
+import platform
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
@@ -59,21 +61,34 @@ def driver():
     # Buat struktur folder untuk screenshot
     ensure_screenshot_dirs()
     
+    # Deteksi apakah berjalan di CI
+    is_ci = os.environ.get('CI') == 'true'
+    
     # Coba gunakan Firefox terlebih dahulu
     try:
         firefox_options = FirefoxOptions()
         firefox_options.add_argument("--headless")
-        driver = webdriver.Firefox(options=firefox_options)
+        
+        # Jika di CI, berikan path eksplisit untuk binary Firefox
+        if is_ci:
+            if platform.system() == "Linux":
+                firefox_options.binary_location = "/usr/bin/firefox"
+                print(f"CI terdeteksi, menggunakan path Firefox: {firefox_options.binary_location}")
+        
+        firefox_service = FirefoxService(executable_path=os.environ.get("GECKODRIVER_PATH", "geckodriver"))
+        driver = webdriver.Firefox(options=firefox_options, service=firefox_service)
         print("Menggunakan Firefox WebDriver")
     except Exception as e:
         print(f"Gagal memulai Firefox: {e}")
         print("Mencoba Chrome sebagai alternatif...")
         # Jika Firefox gagal, coba Chrome
         chrome_options = ChromeOptions()
-        # chrome_options.add_argument("--headless")  # Uncomment untuk mode headless
+        chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(options=chrome_options)
+        
+        chrome_service = ChromeService()
+        driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
         print("Menggunakan Chrome WebDriver")
     
     driver.implicitly_wait(10)
