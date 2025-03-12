@@ -31,6 +31,14 @@ jobs:
         mysql -e "GRANT ALL PRIVILEGES ON damncrud.* TO 'damncrud'@'localhost';" -uroot -proot
         mysql -uroot -proot damncrud < db/damncrud.sql
     
+    - name: Buat struktur folder untuk laporan dan testing
+      run: |
+        # Buat direktori untuk laporan
+        mkdir -p reports
+        
+        # Buat direktori ss_test jika diperlukan
+        mkdir -p ss_test
+    
     - name: Setup Apache
       run: |
         sudo apt-get update
@@ -81,13 +89,10 @@ jobs:
     - name: Instal alat DAST
       run: |
         sudo apt-get update
-        sudo apt-get install -y nikto
+        sudo apt-get install -y nikto jq
       
     - name: Jalankan DAST Baseline Scan Sederhana
       run: |
-        # Membuat direktori untuk laporan
-        mkdir -p reports
-        
         # Jalankan scan sederhana menggunakan curl untuk login page
         echo "Executing basic security checks on login page..."
         curl -s http://localhost/DamnCRUD/login.php -o reports/login_page.html
@@ -167,15 +172,182 @@ jobs:
         echo '```' >> reports/nikto-summary.md
         
         echo "Pemindaian Nikto selesai, laporan disimpan"
+        
+    - name: Uji Kerentanan SQL Injection Sederhana
+      run: |
+        # Buat file untuk hasil pengujian SQL Injection
+        echo "# Pengujian SQL Injection" > reports/sqli-test.md
+        echo "Tanggal: $(date)" >> reports/sqli-test.md
+        echo "" >> reports/sqli-test.md
+        
+        # Daftar parameter yang akan diuji untuk SQL Injection
+        echo "## Parameter yang Diuji" >> reports/sqli-test.md
+        echo "- Username pada halaman login" >> reports/sqli-test.md
+        echo "- ID pada URL parameter" >> reports/sqli-test.md
+        echo "" >> reports/sqli-test.md
+        
+        # Kirim payload SQL injection sederhana ke form login
+        echo "## Pengujian pada Form Login" >> reports/sqli-test.md
+        RESPONSE=$(curl -s -d "username=' OR '1'='1&password=anything" http://localhost/DamnCRUD/login.php)
+        
+        # Cek apakah SQL injection berhasil (login bypass)
+        if echo "$RESPONSE" | grep -q "Howdy"; then
+          echo "- KERENTANAN TERDETEKSI: SQL Injection pada form login memungkinkan bypass autentikasi" >> reports/sqli-test.md
+        else
+          echo "- Form login tampaknya aman dari SQL Injection dasar" >> reports/sqli-test.md
+        fi
+        
+        # Uji URL parameter untuk SQL Injection
+        echo "" >> reports/sqli-test.md
+        echo "## Pengujian pada URL Parameter" >> reports/sqli-test.md
+        RESPONSE=$(curl -s "http://localhost/DamnCRUD/profil.php?id=1%27%20OR%20%271%27=%271")
+        
+        # Cek apakah SQL injection berhasil (menampilkan data yang tidak seharusnya)
+        if echo "$RESPONSE" | grep -q "Error"; then
+          echo "- URL tampaknya rentan terhadap SQL Injection, menunjukkan pesan error database" >> reports/sqli-test.md
+        else
+          echo "- Tidak ada indikasi kerentanan SQL Injection pada parameter URL yang diuji" >> reports/sqli-test.md
+        fi
+        
+        echo "Pengujian SQL Injection selesai"
+        
+    - name: Uji Kerentanan XSS Sederhana
+      run: |
+        # Buat file untuk hasil pengujian XSS
+        echo "# Pengujian Cross-Site Scripting (XSS)" > reports/xss-test.md
+        echo "Tanggal: $(date)" >> reports/xss-test.md
+        echo "" >> reports/xss-test.md
+        
+        # Daftar form input yang akan diuji untuk XSS
+        echo "## Form Input yang Diuji" >> reports/xss-test.md
+        echo "- Form login" >> reports/xss-test.md
+        echo "- Form create" >> reports/xss-test.md
+        echo "" >> reports/xss-test.md
+        
+        # Payloads XSS sederhana
+        XSS_PAYLOADS=(
+          "<script>alert('XSS')</script>"
+          "<img src=x onerror=alert('XSS')>"
+          "\"><script>alert(1)</script>"
+        )
+        
+        # Cek form login untuk XSS
+        echo "## Pengujian pada Form Login" >> reports/xss-test.md
+        for PAYLOAD in "${XSS_PAYLOADS[@]}"; do
+          ENCODED_PAYLOAD=$(echo -n "$PAYLOAD" | jq -sRr @uri)
+          RESPONSE=$(curl -s -d "username=$ENCODED_PAYLOAD&password=test" http://localhost/DamnCRUD/login.php)
+          
+          # Jika payload XSS terlihat utuh dalam respons tanpa escape
+          if echo "$RESPONSE" | grep -q "$PAYLOAD"; then
+            echo "- KERENTANAN TERDETEKSI: XSS mungkin ada pada form login, payload terlihat dalam respons" >> reports/xss-test.md
+            break
+          fi
+        done
+        
+        # Jika tidak ada kerentanan terdeteksi
+        if ! grep -q "KERENTANAN TERDETEKSI" reports/xss-test.md; then
+          echo "- Form login tampaknya menyanitasi input dengan baik" >> reports/xss-test.md
+        fi
+        
+        # Cek form create untuk XSS
+        echo "" >> reports/xss-test.md
+        echo "## Pengujian pada Form Create" >> reports/xss-test.md
+        PAYLOAD="<script>alert('XSS')</script>"
+        ENCODED_PAYLOAD=$(echo -n "$PAYLOAD" | jq -sRr @uri)
+        RESPONSE=$(curl -s -d "name=$ENCODED_PAYLOAD&email=test@example.com&phone=123456&title=Test" http://localhost/DamnCRUD/create.php)
+        
+        if echo "$RESPONSE" | grep -q "$PAYLOAD"; then
+          echo "- KERENTANAN TERDETEKSI: XSS mungkin ada pada form create, payload terlihat dalam respons" >> reports/xss-test.md
+        else
+          echo "- Form create tampaknya menyanitasi input dengan baik" >> reports/xss-test.md
+        fi
+        
+        echo "Pengujian XSS selesai"
+        
+    - name: Buat Laporan Gabungan
+      run: |
+        # Buat laporan gabungan dalam format HTML
+        cat > reports/dast-report.html << EOF
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>DAST Security Report - DamnCRUD</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            h1, h2, h3 { color: #333; }
+            .container { max-width: 1000px; margin: 0 auto; }
+            .warning { color: orange; }
+            .critical { color: red; }
+            .success { color: green; }
+            pre { background: #f5f5f5; padding: 10px; border: 1px solid #ddd; overflow-x: auto; }
+            .section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+            .summary { background-color: #f0f8ff; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>DAST Security Report - DamnCRUD</h1>
+            <p>Generated on: $(date)</p>
+            
+            <div class="section summary">
+              <h2>Ringkasan Pengujian</h2>
+              <p>Pengujian keamanan dinamis (DAST) dilakukan pada aplikasi DamnCRUD untuk mengidentifikasi kerentanan yang mungkin dieksploitasi oleh penyerang.</p>
+              <h3>Metodologi:</h3>
+              <ul>
+                <li>Pemeriksaan konfigurasi HTTP header</li>
+                <li>Pemindaian menggunakan Nikto</li>
+                <li>Pengujian kerentanan SQL Injection</li>
+                <li>Pengujian kerentanan Cross-Site Scripting (XSS)</li>
+              </ul>
+            </div>
+            
+            <div class="section">
+              <h2>Temuan HTTP Headers</h2>
+              <pre>${HEADERS}</pre>
+              <h3>Potensi Kerentanan:</h3>
+              <ul>
+                <li class="warning">Tidak menggunakan HTTPS (aplikasi berjalan di http)</li>
+                <li class="warning">Tidak ada header X-Frame-Options (risiko clickjacking)</li>
+                <li class="warning">Tidak ada header Content-Security-Policy</li>
+              </ul>
+            </div>
+            
+            <div class="section">
+              <h2>Hasil Nikto Scan</h2>
+              <pre>$(cat reports/nikto-output.txt)</pre>
+            </div>
+            
+            <div class="section">
+              <h2>Hasil Pengujian SQL Injection</h2>
+              <pre>$(cat reports/sqli-test.md)</pre>
+            </div>
+            
+            <div class="section">
+              <h2>Hasil Pengujian XSS</h2>
+              <pre>$(cat reports/xss-test.md)</pre>
+            </div>
+            
+            <div class="section">
+              <h2>Rekomendasi Keamanan</h2>
+              <ol>
+                <li>Implementasikan HTTPS untuk mengenkripsi semua trafik</li>
+                <li>Tambahkan header keamanan seperti X-Frame-Options dan Content-Security-Policy</li>
+                <li>Pastikan semua input dari pengguna divalidasi dan disanitasi</li>
+                <li>Gunakan prepared statements untuk semua query database</li>
+                <li>Terapkan pembatasan izin file yang tepat</li>
+                <li>Update semua library dan komponen ke versi terbaru</li>
+              </ol>
+            </div>
+          </div>
+        </body>
+        </html>
+        EOF
+        
+        echo "Laporan gabungan selesai dibuat"
     
     - name: Simpan laporan DAST
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: dast-security-reports
-        path: |
-          reports/baseline-scan.md
-          reports/baseline-report.html
-          reports/login_page.html
-          reports/nikto-report.html
-          reports/nikto-summary.md 
+        path: reports/ 
