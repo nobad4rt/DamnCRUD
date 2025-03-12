@@ -105,7 +105,7 @@ jobs:
       run: |
         echo "Menjalankan ZAP Baseline Scan sebagai root user..."
         
-        docker pull ghcr.io/zaproxy/zaproxy:stable
+        docker pull zaproxy/zaproxy:stable
         
         # Dapatkan IP host
         HOST_IP=$(hostname -I | awk '{print $1}')
