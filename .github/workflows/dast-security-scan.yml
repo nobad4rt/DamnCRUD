@@ -111,64 +111,52 @@ jobs:
         HOST_IP=$(hostname -I | awk '{print $1}')
         echo "Host IP: $HOST_IP"
         
-        # Buat direktori untuk output sementara
-        mkdir -p zap_output
+        # Pastikan direktori reports ada dan memiliki izin yang benar
+        sudo mkdir -p $(pwd)/zap_wrk/reports
+        sudo chmod -R 777 $(pwd)/zap_wrk/reports
         
-        # Jalankan ZAP Baseline Scan dengan output ke direktori lokal
-        # Simpan output ke file untuk diproses
+        # Jalankan ZAP Baseline Scan dengan output ke direktori reports
+        # Parameter -I mengabaikan warning ketika menentukan kode keluar
         docker run --user root --rm -v "$(pwd)/zap_wrk:/zap/wrk:rw" \
           --network host \
           -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
           -t http://localhost/DamnCRUD/ \
+          -g /zap/wrk/reports/baseline-report.html \
+          -x /zap/wrk/reports/baseline-report.xml \
+          -J /zap/wrk/reports/baseline-report.json \
+          -j /zap/wrk/reports/baseline-report.md \
           -a \
-          -I | tee zap_output/zap_console_output.txt || echo "ZAP scan selesai dengan peringatan atau error (exit code $?)"
-          
+          -I || echo "ZAP scan selesai dengan peringatan atau error (exit code $?)"
+        
         echo "ZAP Baseline Scan selesai. Memeriksa hasil..."
-        
-        # Buat laporan Markdown berdasarkan output konsol ZAP
-        echo "# ZAP Baseline Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        
-        # Ekstrak dan tambahkan ringkasan hasil peringatan dan kegagalan
-        echo "## Ringkasan Hasil" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        
-        # Cari baris ringkasan hasil
-        SUMMARY=$(grep "FAIL-NEW\|WARN-NEW" zap_output/zap_console_output.txt)
-        if [ ! -z "$SUMMARY" ]; then
-          echo "Ringkasan hasil:" >> $(pwd)/zap_wrk/reports/baseline-report.md
-          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-          echo "$SUMMARY" >> $(pwd)/zap_wrk/reports/baseline-report.md
-          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-        else
-          echo "Tidak ada ringkasan hasil yang ditemukan." >> $(pwd)/zap_wrk/reports/baseline-report.md
-        fi
-        
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "## Detail Peringatan" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        
-        # Ekstrak dan tambahkan detail peringatan
-        grep -A 5 "WARN-NEW" zap_output/zap_console_output.txt > zap_output/warnings.txt || true
-        if [ -s zap_output/warnings.txt ]; then
-          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-          cat zap_output/warnings.txt >> $(pwd)/zap_wrk/reports/baseline-report.md
-          echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-        else
-          echo "Tidak ada detail peringatan yang ditemukan." >> $(pwd)/zap_wrk/reports/baseline-report.md
-        fi
-        
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "## Output Lengkap" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-        cat zap_output/zap_console_output.txt >> $(pwd)/zap_wrk/reports/baseline-report.md
-        echo '```' >> $(pwd)/zap_wrk/reports/baseline-report.md
-        
-        echo "Laporan ZAP berhasil dibuat di $(pwd)/zap_wrk/reports/baseline-report.md"
         ls -la $(pwd)/zap_wrk/reports/
+        
+        # Jika laporan markdown tidak ada, buat laporan sederhana
+        if [ ! -f "$(pwd)/zap_wrk/reports/baseline-report.md" ]; then
+          echo "Laporan markdown tidak ditemukan, mencoba menggunakan laporan HTML..."
+          
+          # Cek apakah laporan HTML tersedia
+          if [ -f "$(pwd)/zap_wrk/reports/baseline-report.html" ]; then
+            # Ekstrak konten HTML dan buat markdown sederhana
+            echo "# ZAP Baseline Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "## Hasil" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "Laporan HTML tersedia sebagai artifact." >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "Ditemukan beberapa peringatan keamanan. Silakan lihat laporan lengkap." >> $(pwd)/zap_wrk/reports/baseline-report.md
+          else
+            # Buat laporan fallback jika tidak ada laporan yang tersedia
+            echo "# ZAP Baseline Scan Report" > $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "Scan dilakukan pada: $(date)" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "## Kesalahan" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "" >> $(pwd)/zap_wrk/reports/baseline-report.md
+            echo "ZAP tidak berhasil menghasilkan laporan. Hal ini bisa terjadi karena masalah izin atau konfigurasi." >> $(pwd)/zap_wrk/reports/baseline-report.md
+          fi
+        fi
       continue-on-error: true
     
     - name: Jalankan Nikto Scan
