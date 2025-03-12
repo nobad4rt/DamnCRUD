@@ -92,7 +92,7 @@ jobs:
         sudo sh get-docker.sh
         sudo systemctl start docker
         sudo systemctl enable docker
-        sudo docker pull owasp/zap2docker-stable
+        sudo docker pull zaproxy/zap-stable
         sudo docker images
         
     - name: Jalankan OWASP ZAP Baseline Scan (Cepat)
@@ -100,7 +100,7 @@ jobs:
         echo "Menjalankan OWASP ZAP Baseline Scan (pemeriksaan dasar)..."
         
         # Jalankan ZAP baseline scan dengan Docker
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t owasp/zap2docker-stable zap-baseline.py \
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-baseline.py \
           -t http://localhost/DamnCRUD/ \
           -g gen.conf \
           -r baseline-report.html \
@@ -123,7 +123,7 @@ jobs:
         echo "Menjalankan OWASP ZAP API Scan (scan mendalam)..."
         
         # Jalankan ZAP API scan dengan Docker
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t owasp/zap2docker-stable zap-api-scan.py \
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-api-scan.py \
           -t http://localhost/DamnCRUD/ \
           -f openapi \
           -r api-report.html \
@@ -166,7 +166,7 @@ jobs:
         EOF
         
         # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam)
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -v $(pwd)/zap-full-scan.conf:/zap/wrk/options.prop:ro -t owasp/zap2docker-stable zap-full-scan.py \
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -v $(pwd)/zap-full-scan.conf:/zap/wrk/options.prop:ro -t zaproxy/zap-stable zap-full-scan.py \
           -t http://localhost/DamnCRUD/ \
           -r full-scan-report.html \
           -x full-scan-report.xml \
