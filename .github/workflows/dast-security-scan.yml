@@ -294,7 +294,7 @@ jobs:
         EOF
         
         # Jalankan ZAP Authentication Scan dengan Docker
-        sudo docker run --network="host" -v $(pwd):/zap/wrk:rw -t owasp/zap2docker-stable zap.sh \
+        sudo docker run --network="host" -v $(pwd):/zap/wrk:rw -t zaproxy/zap-stable zap.sh \
           -cmd \
           -autorun /zap/wrk/zap-auth-scan.yaml
           
