@@ -87,8 +87,9 @@ jobs:
         
     - name: Setup Docker untuk ZAP
       run: |
-        sudo apt-get update
-        sudo apt-get install -y docker.io
+        # Gunakan metode instalasi Docker yang disarankan
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sudo sh get-docker.sh
         sudo systemctl start docker
         sudo systemctl enable docker
         sudo docker pull owasp/zap2docker-stable
