@@ -36,20 +36,47 @@ jobs:
         sudo apt-get update
         sudo apt-get install apache2 libapache2-mod-php7.4
         sudo a2enmod php7.4
+        sudo a2enmod rewrite
+        sudo a2enmod headers
         sudo systemctl start apache2
-        sudo ln -s $(pwd) /var/www/html/DamnCRUD
-        sudo chmod -R 777 /var/www/html/DamnCRUD
+        
+        # Siapkan direktori di Apache
+        sudo mkdir -p /var/www/html/DamnCRUD
+        sudo cp -r $(pwd)/* /var/www/html/DamnCRUD/
+        
+        # Berikan izin yang benar
+        sudo chown -R www-data:www-data /var/www/html/DamnCRUD
+        sudo chmod -R 755 /var/www/html/DamnCRUD
+        
+        # Pastikan .htaccess aktif
+        sudo sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+        sudo systemctl reload apache2
+        
+        # Buat site config khusus
+        echo -e "<VirtualHost *:80>\n\tServerName localhost\n\tDocumentRoot /var/www/html\n\t<Directory /var/www/html>\n\t\tOptions Indexes FollowSymLinks MultiViews\n\t\tAllowOverride All\n\t\tRequire all granted\n\t</Directory>\n</VirtualHost>" | sudo tee /etc/apache2/sites-available/000-default.conf
+        sudo systemctl reload apache2
+        
+        # Periksa apakah Apache berfungsi dan folder dapat diakses
+        ls -la /var/www/html/DamnCRUD/
+        curl -I http://localhost/DamnCRUD/
     
     - name: Sesuaikan koneksi database
       run: |
-        sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "localhost";/' functions.php
-        sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "damncrud";/' functions.php
-        sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "damncrud123";/' functions.php
-        sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' functions.php
+        sudo sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "localhost";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "damncrud";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "damncrud123";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' /var/www/html/DamnCRUD/functions.php
     
     - name: Verifikasi aplikasi berjalan
       run: |
-        curl -I http://localhost/DamnCRUD/
+        # Verifikasi Apache berjalan
+        sudo systemctl status apache2
+        
+        # Cek error log Apache
+        sudo tail -n 50 /var/log/apache2/error.log
+        
+        # Cek akses ke halaman login
+        curl -v http://localhost/DamnCRUD/login.php
       
     - name: OWASP ZAP Baseline Scan
       uses: zaproxy/action-baseline@v0.10.0

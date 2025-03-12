@@ -1,0 +1,28 @@
+# Aktifkan modul rewrite
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /DamnCRUD/
+    
+    # Izinkan akses ke semua file dan direktori
+    <FilesMatch ".*">
+        Order Allow,Deny
+        Allow from all
+    </FilesMatch>
+</IfModule>
+
+# Izinkan akses dari semua alamat IP
+<Directory "/var/www/html/DamnCRUD">
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+
+# Pastikan file PHP dieksekusi dengan benar
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+
+# Izinkan header CORS
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+</IfModule> 

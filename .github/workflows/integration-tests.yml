@@ -40,16 +40,39 @@ jobs:
         sudo apt-get update
         sudo apt-get install apache2 libapache2-mod-php7.4
         sudo a2enmod php7.4
+        sudo a2enmod rewrite
+        sudo a2enmod headers
         sudo systemctl start apache2
-        sudo ln -s $(pwd) /var/www/html/DamnCRUD
-        sudo chmod -R 777 /var/www/html/DamnCRUD
+        
+        # Siapkan direktori di Apache
+        sudo mkdir -p /var/www/html/DamnCRUD
+        sudo cp -r $(pwd)/* /var/www/html/DamnCRUD/
+        
+        # Berikan izin yang benar
+        sudo chown -R www-data:www-data /var/www/html/DamnCRUD
+        sudo chmod -R 755 /var/www/html/DamnCRUD
+        
+        # Berikan izin lebih untuk file yang membutuhkan operasi tulis
+        sudo chmod -R 777 /var/www/html/DamnCRUD/ss_test
+        
+        # Pastikan .htaccess aktif
+        sudo sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+        sudo systemctl reload apache2
+        
+        # Buat site config khusus
+        echo -e "<VirtualHost *:80>\n\tServerName localhost\n\tDocumentRoot /var/www/html\n\t<Directory /var/www/html>\n\t\tOptions Indexes FollowSymLinks MultiViews\n\t\tAllowOverride All\n\t\tRequire all granted\n\t</Directory>\n</VirtualHost>" | sudo tee /etc/apache2/sites-available/000-default.conf
+        sudo systemctl reload apache2
+        
+        # Periksa apakah Apache berfungsi dan folder dapat diakses
+        ls -la /var/www/html/DamnCRUD/
+        curl -I http://localhost/DamnCRUD/
     
     - name: Sesuaikan koneksi database
       run: |
-        sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "127.0.0.1";/' functions.php
-        sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "root";/' functions.php
-        sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "root123";/' functions.php
-        sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' functions.php
+        sudo sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "127.0.0.1";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "root";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "root123";/' /var/www/html/DamnCRUD/functions.php
+        sudo sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' /var/www/html/DamnCRUD/functions.php
     
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -87,6 +110,22 @@ jobs:
         mkdir -p ss_test/update
         mkdir -p ss_test/delete
         mkdir -p ss_test/common
+        sudo chmod -R 777 ss_test
+    
+    - name: Debug server
+      run: |
+        # Verifikasi Apache berjalan
+        sudo systemctl status apache2
+        
+        # Cek error log Apache
+        sudo tail -n 50 /var/log/apache2/error.log
+        
+        # Cek akses file login.php
+        ls -la /var/www/html/DamnCRUD/login.php
+        sudo cat /var/www/html/DamnCRUD/login.php | head -n 10
+        
+        # Cek akses ke halaman login
+        curl -v http://localhost/DamnCRUD/login.php
     
     - name: Jalankan test
       env:
