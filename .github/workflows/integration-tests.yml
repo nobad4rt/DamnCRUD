@@ -61,18 +61,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest pytest-html pytest-xdist selenium webdriver-manager
     
-    - name: Install Chrome sebagai browser utama
+    - name: Setup Firefox sebagai browser utama
       run: |
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
         sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
-        echo "Chrome version: $(google-chrome --version)"
+        # Menggunakan Firefox standard
+        sudo apt-get install -y firefox
+        firefox --version
 
-    - name: Setup ChromeDriver
-      uses: nanasess/setup-chromedriver@v2
-      with:
-        chromedriver-version: 'latest'
+    - name: Setup Firefox GeckoDriver
+      run: |
+        # Unduh GeckoDriver terbaru
+        wget https://github.com/mozilla/geckodriver/releases/download/v0.33.0/geckodriver-v0.33.0-linux64.tar.gz
+        tar -xzf geckodriver-v0.33.0-linux64.tar.gz
+        sudo mv geckodriver /usr/local/bin/
+        sudo chmod +x /usr/local/bin/geckodriver
+        # Cetak versi untuk debugging
+        geckodriver --version
+        # Set variabel lingkungan untuk path GeckoDriver
+        echo "GECKODRIVER_PATH=/usr/local/bin/geckodriver" >> $GITHUB_ENV
 
     - name: Buat struktur folder screenshot
       run: |
@@ -85,6 +91,7 @@ jobs:
     - name: Jalankan test
       env:
         CI: true
+        BROWSER: firefox
       run: |
         # Atur display virtual untuk browser
         export DISPLAY=:99
@@ -94,8 +101,8 @@ jobs:
         sed -i 's|BASE_URL = "http://localhost/DamnCRUD"|BASE_URL = "http://localhost/DamnCRUD"|g' test_integration.py
 
         # Cetak path untuk debugging
-        which chromedriver
-        which google-chrome
+        which firefox
+        which geckodriver
         
         # Jalankan test secara sequential (tanpa paralel) untuk menghindari konflik
         python -m pytest test_integration.py -v --html=report.html --self-contained-html

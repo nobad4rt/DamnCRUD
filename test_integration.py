@@ -63,27 +63,53 @@ def driver():
     
     # Deteksi apakah berjalan di CI
     is_ci = os.environ.get('CI') == 'true'
+    browser_preference = os.environ.get('BROWSER', 'firefox').lower()
     
-    # Coba gunakan Firefox terlebih dahulu
-    try:
-        firefox_options = FirefoxOptions()
-        firefox_options.add_argument("--headless")
-        
-        # Jika di CI, berikan path eksplisit untuk binary Firefox
-        if is_ci:
-            if platform.system() == "Linux":
-                firefox_options.binary_location = "/usr/bin/firefox"
-                print(f"CI terdeteksi, menggunakan path Firefox: {firefox_options.binary_location}")
-        
-        firefox_service = FirefoxService(executable_path=os.environ.get("GECKODRIVER_PATH", "geckodriver"))
-        driver = webdriver.Firefox(options=firefox_options, service=firefox_service)
-        print("Menggunakan Firefox WebDriver")
-    except Exception as e:
-        print(f"Gagal memulai Firefox: {e}")
-        print("Mencoba Chrome sebagai alternatif...")
-        # Jika Firefox gagal, coba Chrome
+    # Preferensi browser dari environment variable atau default ke Firefox
+    if browser_preference == 'firefox':
+        try:
+            print("Memulai Firefox WebDriver...")
+            firefox_options = FirefoxOptions()
+            
+            # Tambahkan opsi headless untuk CI atau jika diminta
+            if is_ci:
+                firefox_options.add_argument("--headless")
+            
+            # Jika di CI, berikan path eksplisit untuk binary Firefox
+            if is_ci:
+                if platform.system() == "Linux":
+                    firefox_binary = "/usr/bin/firefox"
+                    if os.path.exists(firefox_binary):
+                        firefox_options.binary_location = firefox_binary
+                        print(f"CI terdeteksi, menggunakan path Firefox: {firefox_options.binary_location}")
+            
+            # Gunakan path geckodriver dari environment variable jika tersedia
+            geckodriver_path = os.environ.get("GECKODRIVER_PATH", "geckodriver")
+            print(f"Menggunakan GeckoDriver path: {geckodriver_path}")
+            
+            firefox_service = FirefoxService(executable_path=geckodriver_path)
+            driver = webdriver.Firefox(options=firefox_options, service=firefox_service)
+            print("Berhasil menginisialisasi Firefox WebDriver")
+            
+        except Exception as e:
+            print(f"Gagal memulai Firefox: {e}")
+            print("Mencoba Chrome sebagai alternatif...")
+            # Jika Firefox gagal, coba Chrome
+            chrome_options = ChromeOptions()
+            if is_ci:
+                chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            
+            chrome_service = ChromeService()
+            driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
+            print("Menggunakan Chrome WebDriver")
+    else:
+        # Jika browser preference adalah Chrome
+        print("Memulai Chrome WebDriver berdasarkan preferensi...")
         chrome_options = ChromeOptions()
-        chrome_options.add_argument("--headless")
+        if is_ci:
+            chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         
