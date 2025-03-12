@@ -26,15 +26,11 @@ jobs:
     - name: Checkout kode
       uses: actions/checkout@v4
     
-    - name: Setup PHP dengan Composer
+    - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
         php-version: '7.4'
         extensions: mbstring, intl, pdo_mysql
-    
-    - name: Install dependensi PHP
-      run: |
-        composer install --prefer-dist --no-progress
     
     - name: Import database
       run: mysql -h 127.0.0.1 -u root -proot123 damncrud < db/damncrud.sql
