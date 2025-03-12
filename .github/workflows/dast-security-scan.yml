@@ -349,3 +349,110 @@ jobs:
       with:
         name: dast-security-reports
         path: reports/ 
+        
+    - name: Setup GitHub CLI
+      run: |
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+        
+    - name: Autentikasi GitHub CLI
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+        
+    - name: Buat GitHub issue dari hasil scan
+      if: success() || failure()
+      run: |
+        # Ringkasan hasil scan yang akan ditampilkan di issue
+        echo "Membuat ringkasan hasil scan DAST..."
+        
+        # Periksa apakah ada kerentanan yang ditemukan
+        VULNERABILITIES_FOUND=false
+        if grep -q "KERENTANAN TERDETEKSI" reports/sqli-test.md reports/xss-test.md; then
+          VULNERABILITIES_FOUND=true
+        fi
+        
+        # Buat file untuk ringkasan issue
+        cat > issue_summary.md << EOF
+        # Hasil Pemindaian Keamanan DAST
+
+        Laporan ini dibuat secara otomatis oleh GitHub Actions pada tanggal $(date).
+        
+        ## Sumber
+        * Branch: \`${GITHUB_REF_NAME}\`
+        * Commit: [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})
+        * Workflow: [${GITHUB_WORKFLOW}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+
+        ## Ringkasan Temuan
+        
+        ### HTTP Headers
+        \`\`\`
+        $(head -n 10 reports/nikto-output.txt)
+        \`\`\`
+
+        ### Temuan SQL Injection
+        \`\`\`
+        $(grep -E "KERENTANAN TERDETEKSI|tidak|aman" reports/sqli-test.md || echo "Tidak ada temuan SQL Injection spesifik")
+        \`\`\`
+
+        ### Temuan XSS
+        \`\`\`
+        $(grep -E "KERENTANAN TERDETEKSI|menyanitasi|baik" reports/xss-test.md || echo "Tidak ada temuan XSS spesifik")
+        \`\`\`
+
+        ### Detail Nikto Scan
+        \`\`\`
+        $(tail -n 20 reports/nikto-output.txt)
+        \`\`\`
+
+        ### Rekomendasi Keamanan
+        1. Implementasikan HTTPS untuk mengenkripsi semua trafik
+        2. Tambahkan header keamanan seperti X-Frame-Options dan Content-Security-Policy
+        3. Pastikan semua input dari pengguna divalidasi dan disanitasi
+        4. Gunakan prepared statements untuk semua query database
+        5. Terapkan pembatasan izin file yang tepat
+
+        [Laporan lengkap tersedia sebagai artifact pada workflow run ini](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+        EOF
+        
+        # Buat issue di GitHub menggunakan GitHub CLI
+        if [ "$VULNERABILITIES_FOUND" = true ]; then
+          echo "Membuat issue di GitHub karena kerentanan terdeteksi..."
+          
+          # Tentukan judul issue
+          ISSUE_TITLE="[KRITIS] Hasil Pemindaian Keamanan DAST - Kerentanan Terdeteksi"
+          
+          # Buat issue dengan label kritis
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --body-file issue_summary.md \
+            --label "security" --label "dast-scan" --label "critical"
+        else
+          # Cek jika ada temuan Nikto yang mungkin penting
+          if grep -q "OSVDB-" reports/nikto-output.txt; then
+            echo "Membuat issue di GitHub karena temuan potensial dari Nikto..."
+            
+            # Tentukan judul issue
+            ISSUE_TITLE="[PERINGATAN] Hasil Pemindaian Keamanan DAST - Risiko Potensial"
+            
+            # Buat issue dengan label peringatan
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body-file issue_summary.md \
+              --label "security" --label "dast-scan" --label "warning"
+          else
+            echo "Tidak ada kerentanan kritis yang ditemukan, membuat issue dengan tingkat info..."
+            
+            # Tentukan judul issue
+            ISSUE_TITLE="[INFO] Hasil Pemindaian Keamanan DAST - Tidak Ada Masalah Kritis"
+            
+            # Buat issue dengan label info
+            gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body-file issue_summary.md \
+              --label "security" --label "dast-scan" --label "info"
+          fi
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
