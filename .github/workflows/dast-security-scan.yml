@@ -180,7 +180,6 @@ jobs:
           -c zap-full-scan.conf \
           -a \
           -j \
-          --ajax \
           -d \
           -T 10 \
           -m 5 \
