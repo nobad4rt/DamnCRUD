@@ -35,6 +35,9 @@ jobs:
         mkdir -p reports
         mkdir -p zap-reports
         
+        # Berikan izin penuh untuk direktori zap-reports
+        chmod -R 777 zap-reports
+        
         # Buat direktori ss_test jika diperlukan
         mkdir -p ss_test
     
@@ -99,10 +102,9 @@ jobs:
       run: |
         echo "Menjalankan OWASP ZAP Baseline Scan (pemeriksaan dasar)..."
         
-        # Jalankan ZAP baseline scan dengan Docker
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-baseline.py \
+        # Jalankan ZAP baseline scan dengan Docker - tanpa menggunakan opsi gen.conf
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-baseline.py \
           -t http://localhost/DamnCRUD/ \
-          -g gen.conf \
           -r baseline-report.html \
           -I \
           -a \
@@ -122,8 +124,8 @@ jobs:
       run: |
         echo "Menjalankan OWASP ZAP API Scan (scan mendalam)..."
         
-        # Jalankan ZAP API scan dengan Docker
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-api-scan.py \
+        # Jalankan ZAP API scan dengan Docker - dengan user yang sama dengan host
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-api-scan.py \
           -t http://localhost/DamnCRUD/ \
           -f openapi \
           -r api-report.html \
@@ -147,7 +149,7 @@ jobs:
         echo "Menjalankan OWASP ZAP Full Scan (pemindaian lengkap dan mendalam)..."
         
         # Buat file konfigurasi ZAP
-        cat > zap-full-scan.conf << EOF
+        cat > zap-reports/zap-full-scan.conf << EOF
         # Tambahkan aturan kustom di sini
         # Format: <plugin_id> = <level>
         
@@ -165,11 +167,12 @@ jobs:
         40018 = FAIL      # SQL Injection
         EOF
         
-        # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam)
-        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -v $(pwd)/zap-full-scan.conf:/zap/wrk/options.prop:ro -t zaproxy/zap-stable zap-full-scan.py \
+        # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam) - dengan user yang sama dengan host
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap-full-scan.py \
           -t http://localhost/DamnCRUD/ \
           -r full-scan-report.html \
           -x full-scan-report.xml \
+          -c zap-full-scan.conf \
           -a \
           -j \
           --ajax \
@@ -200,7 +203,7 @@ jobs:
         echo "Menjalankan pengujian autentikasi dengan ZAP..."
         
         # Buat file untuk context ZAP
-        cat > context.conf << EOF
+        cat > zap-reports/context.conf << EOF
         <?xml version="1.0" encoding="UTF-8" standalone="no"?>
         <configuration>
             <context>
@@ -232,7 +235,7 @@ jobs:
         EOF
         
         # Buat file URL untuk ZAP
-        cat > urls.txt << EOF
+        cat > zap-reports/urls.txt << EOF
         http://localhost/DamnCRUD/login.php
         http://localhost/DamnCRUD/index.php
         http://localhost/DamnCRUD/create.php
@@ -241,7 +244,7 @@ jobs:
         EOF
         
         # Buat skrip ZAP Automation Framework
-        cat > zap-auth-scan.yaml << EOF
+        cat > zap-reports/zap-auth-scan.yaml << EOF
         env:
           contexts:
             - name: DamnCRUD
@@ -293,8 +296,8 @@ jobs:
               reportTitle: Authentication Scan Report
         EOF
         
-        # Jalankan ZAP Authentication Scan dengan Docker
-        sudo docker run --network="host" -v $(pwd):/zap/wrk:rw -t zaproxy/zap-stable zap.sh \
+        # Jalankan ZAP Authentication Scan dengan Docker - dengan user yang sama dengan host
+        sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw --user $(id -u):$(id -g) -t zaproxy/zap-stable zap.sh \
           -cmd \
           -autorun /zap/wrk/zap-auth-scan.yaml
           
