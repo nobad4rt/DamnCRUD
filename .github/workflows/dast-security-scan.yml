@@ -361,6 +361,20 @@ jobs:
       run: |
         echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
         
+    - name: Buat Label GitHub yang Diperlukan
+      run: |
+        echo "Membuat label yang diperlukan jika belum ada..."
+        # Buat label security
+        gh label create "security" --description "Terkait keamanan aplikasi" --color "D93F0B" || true
+        # Buat label dast-scan
+        gh label create "dast-scan" --description "Hasil dari pemindaian DAST" --color "0075CA" || true
+        # Buat label critical
+        gh label create "critical" --description "Masalah kritis yang perlu segera ditangani" --color "B60205" || true
+        # Buat label warning
+        gh label create "warning" --description "Peringatan yang perlu diperhatikan" --color "FBCA04" || true
+        # Buat label info
+        gh label create "info" --description "Informasi umum" --color "0E8A16" || true
+        
     - name: Buat GitHub issue dari hasil scan
       if: success() || failure()
       run: |
@@ -427,7 +441,7 @@ jobs:
           gh issue create \
             --title "$ISSUE_TITLE" \
             --body-file issue_summary.md \
-            --label "security" --label "dast-scan" --label "critical" --create-label
+            --label "security" --label "dast-scan" --label "critical"
         else
           # Cek jika ada temuan Nikto yang mungkin penting
           if grep -q "OSVDB-" reports/nikto-output.txt; then
@@ -440,7 +454,7 @@ jobs:
             gh issue create \
               --title "$ISSUE_TITLE" \
               --body-file issue_summary.md \
-              --label "security" --label "dast-scan" --label "warning" --create-label
+              --label "security" --label "dast-scan" --label "warning"
           else
             echo "Tidak ada kerentanan kritis yang ditemukan, membuat issue dengan tingkat info..."
             
@@ -451,7 +465,7 @@ jobs:
             gh issue create \
               --title "$ISSUE_TITLE" \
               --body-file issue_summary.md \
-              --label "security" --label "dast-scan" --label "info" --create-label
+              --label "security" --label "dast-scan" --label "info"
           fi
         fi
       env:
