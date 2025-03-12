@@ -153,24 +153,26 @@ jobs:
       run: |
         echo "Menjalankan OWASP ZAP Full Scan (pemindaian lengkap dan mendalam)..."
         
-        # Buat file konfigurasi ZAP
-        cat > zap-reports/zap-full-scan.conf << EOF
-        # Tambahkan aturan kustom di sini
-        # Format: <plugin_id> = <level>
+        # Buat file konfigurasi ZAP dengan konten yang benar secara manual
+        echo "# Tambahkan aturan kustom di sini" > zap-reports/zap-full-scan.conf
+        echo "# Format: <plugin_id> <tab> <level>" >> zap-reports/zap-full-scan.conf
+        echo "" >> zap-reports/zap-full-scan.conf
+        echo "# Level: IGNORE, INFO, WARN, FAIL" >> zap-reports/zap-full-scan.conf
+        echo "" >> zap-reports/zap-full-scan.conf
+        echo "# Ignore beberapa aturan yang umum menghasilkan false positives" >> zap-reports/zap-full-scan.conf
+        echo -e "10016\tINFO\t# Missing Anti-clickjacking Header" >> zap-reports/zap-full-scan.conf
+        echo -e "10021\tINFO\t# X-Content-Type-Options Header Missing" >> zap-reports/zap-full-scan.conf
+        echo -e "10038\tINFO\t# Content Security Policy (CSP) Header Not Set" >> zap-reports/zap-full-scan.conf
+        echo -e "10049\tINFO\t# Non-Storable Content" >> zap-reports/zap-full-scan.conf
+        echo "" >> zap-reports/zap-full-scan.conf
+        echo "# Tingkatkan beberapa aturan penting" >> zap-reports/zap-full-scan.conf
+        echo -e "40012\tFAIL\t# Cross Site Scripting (Reflected)" >> zap-reports/zap-full-scan.conf
+        echo -e "40014\tFAIL\t# Cross Site Scripting (Persistent)" >> zap-reports/zap-full-scan.conf
+        echo -e "40018\tFAIL\t# SQL Injection" >> zap-reports/zap-full-scan.conf
         
-        # Level: IGNORE, INFO, WARN, FAIL
-        
-        # Ignore beberapa aturan yang umum menghasilkan false positives
-        10016 = INFO    # Missing Anti-clickjacking Header
-        10021 = INFO    # X-Content-Type-Options Header Missing
-        10038 = INFO    # Content Security Policy (CSP) Header Not Set
-        10049 = INFO    # Non-Storable Content
-        
-        # Tingkatkan beberapa aturan penting
-        40012 = FAIL      # Cross Site Scripting (Reflected)
-        40014 = FAIL      # Cross Site Scripting (Persistent)
-        40018 = FAIL      # SQL Injection
-        EOF
+        # Verifikasi format file konfigurasi
+        echo "Memeriksa format file konfigurasi ZAP:"
+        cat zap-reports/zap-full-scan.conf
         
         # Jalankan ZAP full scan dengan Docker (pemindaian sangat mendalam) sebagai root
         sudo docker run --network="host" -v $(pwd)/zap-reports:/zap/wrk:rw -t zaproxy/zap-stable zap-full-scan.py \
