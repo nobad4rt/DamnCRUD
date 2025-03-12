@@ -1,0 +1,75 @@
+name: DAST Security Scan
+
+on:
+  # Menjalankan setelah workflow integration-tests selesai dijalankan
+  workflow_run:
+    workflows: ["Integration Tests"]
+    types:
+      - completed
+  # Menjalankan secara manual jika diperlukan
+  workflow_dispatch:
+
+jobs:
+  zap-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout kode
+      uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        extensions: mbstring, intl, pdo_mysql
+    
+    - name: Setup MySQL
+      run: |
+        sudo systemctl start mysql
+        mysql -e "CREATE DATABASE IF NOT EXISTS damncrud;" -uroot -proot
+        mysql -e "CREATE USER IF NOT EXISTS 'damncrud'@'localhost' IDENTIFIED BY 'damncrud123';" -uroot -proot
+        mysql -e "GRANT ALL PRIVILEGES ON damncrud.* TO 'damncrud'@'localhost';" -uroot -proot
+        mysql -uroot -proot damncrud < db/damncrud.sql
+    
+    - name: Setup Apache
+      run: |
+        sudo apt-get update
+        sudo apt-get install apache2 libapache2-mod-php7.4
+        sudo a2enmod php7.4
+        sudo systemctl start apache2
+        sudo ln -s $(pwd) /var/www/html/DamnCRUD
+        sudo chmod -R 777 /var/www/html/DamnCRUD
+    
+    - name: Sesuaikan koneksi database
+      run: |
+        sed -i 's/$DATABASE_HOST = .\+/$DATABASE_HOST = "localhost";/' functions.php
+        sed -i 's/$DATABASE_USER = .\+/$DATABASE_USER = "damncrud";/' functions.php
+        sed -i 's/$DATABASE_PASS = .\+/$DATABASE_PASS = "damncrud123";/' functions.php
+        sed -i 's/$DATABASE_NAME = .\+/$DATABASE_NAME = "damncrud";/' functions.php
+    
+    - name: Verifikasi aplikasi berjalan
+      run: |
+        curl -I http://localhost/DamnCRUD/
+      
+    - name: OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://localhost/DamnCRUD/'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
+    
+    - name: OWASP ZAP Full Scan
+      uses: zaproxy/action-full-scan@v0.8.0
+      with:
+        target: 'http://localhost/DamnCRUD/'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
+    
+    - name: Simpan laporan ZAP
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: zap-scan-reports
+        path: |
+          zap-*-report.html
+          zap-*-report.md 
