@@ -34,6 +34,18 @@ jobs:
     
     - name: Import database
       run: mysql -h 127.0.0.1 -u root -proot123 damncrud < db/damncrud.sql
+      
+    - name: Buat struktur folder screenshot
+      run: |
+        # Buat struktur folder screenshot terlebih dahulu
+        mkdir -p ss_test/login
+        mkdir -p ss_test/create
+        mkdir -p ss_test/update
+        mkdir -p ss_test/delete
+        mkdir -p ss_test/common
+        
+        # Berikan izin yang tepat
+        chmod -R 777 ss_test
     
     - name: Setup Apache
       run: |
@@ -52,7 +64,7 @@ jobs:
         sudo chown -R www-data:www-data /var/www/html/DamnCRUD
         sudo chmod -R 755 /var/www/html/DamnCRUD
         
-        # Berikan izin lebih untuk file yang membutuhkan operasi tulis
+        # Berikan izin khusus untuk folder ss_test
         sudo chmod -R 777 /var/www/html/DamnCRUD/ss_test
         
         # Pastikan .htaccess aktif
@@ -103,15 +115,6 @@ jobs:
         # Set variabel lingkungan untuk path GeckoDriver
         echo "GECKODRIVER_PATH=/usr/local/bin/geckodriver" >> $GITHUB_ENV
 
-    - name: Buat struktur folder screenshot
-      run: |
-        mkdir -p ss_test/login
-        mkdir -p ss_test/create
-        mkdir -p ss_test/update
-        mkdir -p ss_test/delete
-        mkdir -p ss_test/common
-        sudo chmod -R 777 ss_test
-    
     - name: Debug server
       run: |
         # Verifikasi Apache berjalan
@@ -123,6 +126,9 @@ jobs:
         # Cek akses file login.php
         ls -la /var/www/html/DamnCRUD/login.php
         sudo cat /var/www/html/DamnCRUD/login.php | head -n 10
+        
+        # Cek direktori ss_test
+        ls -la /var/www/html/DamnCRUD/ss_test
         
         # Cek akses ke halaman login
         curl -v http://localhost/DamnCRUD/login.php
