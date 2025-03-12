@@ -20,12 +20,12 @@ def ensure_screenshot_dirs():
     subfolders = ["login", "create", "update", "delete", "common"]
     
     if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
+        os.makedirs(base_dir, exist_ok=True)
         
     for folder in subfolders:
         folder_path = os.path.join(base_dir, folder)
         if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+            os.makedirs(folder_path, exist_ok=True)
 
 # Buat struktur folder saat modul dimuat
 ensure_screenshot_dirs()

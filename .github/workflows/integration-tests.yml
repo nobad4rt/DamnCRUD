@@ -78,14 +78,6 @@ jobs:
         sudo mv geckodriver /usr/local/bin/
         geckodriver --version
     
-    - name: Install Chrome sebagai cadangan
-      run: |
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
-        google-chrome --version
-    
     - name: Jalankan test paralel
       run: |
         # Atur display virtual untuk browser
@@ -95,8 +87,8 @@ jobs:
         # Set BASE_URL di test_integration.py
         sed -i 's|BASE_URL = "http://localhost/DamnCRUD"|BASE_URL = "http://localhost/DamnCRUD"|g' test_integration.py
         
-        # Jalankan test
-        python -m pytest test_integration.py -v --html=report.html --self-contained-html -n 2
+        # Jalankan test, menggunakan loadfile untuk distribusi tes yang lebih baik
+        python -m pytest test_integration.py -v --html=report.html --self-contained-html -n 2 --dist=loadfile
     
     - name: Simpan bukti screenshot
       uses: actions/upload-artifact@v4
