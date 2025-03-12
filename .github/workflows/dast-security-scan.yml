@@ -196,8 +196,7 @@ jobs:
           -d \
           -T 10 \
           -m 5 \
-          -n \
-          -z "-config attackStrength=HIGH -config attackPersistence=10 -config globalPluginsEnabled=true -config scanner.scanMaxDuration=10"
+          -n
         scan_exit_code=$?
         set -e  # Kembali ke mode error biasa
         
